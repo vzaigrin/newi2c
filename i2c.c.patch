@@ -1,0 +1,342 @@
+40c40,41
+< 
+---
+> #include <sys/types.h>
+> #include <sys/sysctl.h>
+60,61c61,62
+< 	uint32_t	addr;
+< 	uint32_t	off;
+---
+> 	uint16_t	addr;
+> 	uint16_t	off;
+125c126
+< 	int *tokens, fd, error, i, index, j;
+---
+> 	int *tokens, fd, i, index, j;
+126a128,132
+> 	struct iic_msg msg[2];
+> 	struct iic_rdwr_data rdwr;
+> 	int mute;
+> 	uint8_t offset, buf;
+> 	int found = 0;
+156a163,166
+> /* To read from non existing device we need first to disable console messages */
+> 	mute = 1;
+> 	sysctlbyname("kern.consmute", NULL, NULL, &mute, sizeof(mute) );
+> 
+177,192c187,209
+< 		cmd.slave = i << 1;
+< 		cmd.last = 1;
+< 		cmd.count = 0;
+< 		error = ioctl(fd, I2CRSTCARD, &cmd);
+< 		if (error)
+< 			goto out;
+< 
+< 		cmd.slave = i << 1;
+< 		cmd.last = 1;
+< 		error = ioctl(fd, I2CSTART, &cmd);
+< 		if (!error)
+< 			printf("%x ", i);
+< 		cmd.slave = i << 1;
+< 		cmd.last = 1;
+< 		error = ioctl(fd, I2CSTOP, &cmd);
+< 	}
+---
+> 		offset = 0;
+> 		msg[0].slave = i;
+> 		msg[0].flags = !IIC_M_RD;
+> 		msg[0].len = sizeof( offset );
+> 		msg[0].buf = &offset;
+> 		msg[1].slave = i;
+> 		msg[1].flags = IIC_M_RD;
+> 		msg[1].len = sizeof( buf );
+> 		msg[1].buf = &buf;
+> 		rdwr.msgs = msg;
+> 		rdwr.nmsgs = 2;
+> 		if ( ioctl(fd, I2CRDWR, &rdwr) >= 0 )  {
+> 		  printf("%x ", i);
+> 		  found = 1;
+> 		}
+> 	
+> 	}
+> 
+> 	if ( !found )  printf( "nothing found\n" );
+> 
+> /* Now we need to enable console messages */
+> 	mute = 0;
+> 	sysctlbyname("kern.consmute", NULL, NULL, &mute, sizeof(mute) );
+195d211
+< 	error = ioctl(fd, I2CRSTCARD, &cmd);
+201,206c217
+< 	if (error) {
+< 		fprintf(stderr, "Error scanning I2C controller (%s): %s\n",
+< 		    dev, strerror(errno));
+< 		return (EX_NOINPUT);
+< 	} else
+< 		return (EX_OK);
+---
+> 	return (EX_OK);
+212d222
+< 	int fd, error;
+214,219c224
+< 	fd = open(dev, O_RDWR);
+< 	if (fd == -1) {
+< 		fprintf(stderr, "Error opening I2C controller (%s) for "
+< 		    "resetting: %s\n", dev, strerror(errno));
+< 		return (EX_NOINPUT);
+< 	}
+---
+> /* We can't reset bus, so do nothing */
+221,231c226
+< 	printf("Resetting I2C controller on %s: ", dev);
+< 	error = ioctl(fd, I2CRSTCARD, &cmd);
+< 	close (fd);
+< 
+< 	if (error) {
+< 		printf("error: %s\n", strerror(errno));
+< 		return (EX_IOERR);
+< 	} else {
+< 		printf("OK\n");
+< 		return (EX_OK);
+< 	}
+---
+> 	return (EX_OK);
+234c229
+< static char *
+---
+> static uint8_t *
+237c232
+< 	char *buf;
+---
+> 	uint8_t *buf;
+254c249
+< i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
+---
+> i2c_write(char *dev, struct options i2c_opt, uint8_t *i2c_buf)
+256,258c251,256
+< 	struct iiccmd cmd;
+< 	int ch, i, error, fd, bufsize;
+< 	char *err_msg, *buf;
+---
+> 	int ch, i, fd, bufsize;
+> 	char *err_msg;
+> 	struct iic_msg msg;
+> 	struct iic_rdwr_data rdwr;
+> 	uint8_t *buf, *dbuf;
+> 	
+272c270
+< 		i2c_buf[i] = ch;
+---
+> 		i2c_buf[i] = (uint8_t)ch;
+284,289d281
+< 	cmd.slave = i2c_opt.addr;
+< 	error = ioctl(fd, I2CSTART, &cmd);
+< 	if (error == -1) {
+< 		err_msg = "ioctl: error sending start condition";
+< 		goto err1;
+< 	}
+298,332d289
+< 
+< 		cmd.count = bufsize;
+< 		cmd.buf = buf;
+< 		error = ioctl(fd, I2CWRITE, &cmd);
+< 		free(buf);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error when write offset";
+< 			goto err1;
+< 		}
+< 	}
+< 
+< 	/* Mode - stop start */
+< 	if (i2c_opt.mode == I2C_MODE_STOP_START) {
+< 		cmd.slave = i2c_opt.addr;
+< 		error = ioctl(fd, I2CSTOP, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending stop condition";
+< 			goto err2;
+< 		}
+< 		cmd.slave = i2c_opt.addr;
+< 		error = ioctl(fd, I2CSTART, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending start condition";
+< 			goto err1;
+< 		}
+< 	}
+< 	/* Mode - repeated start */
+< 	if (i2c_opt.mode == I2C_MODE_REPEATED_START) {
+< 		cmd.slave = i2c_opt.addr;
+< 		error = ioctl(fd, I2CRPTSTART, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending repeated start "
+< 			    "condition";
+< 			goto err1;
+< 		}
+338,350c295,313
+< 	cmd.count = i2c_opt.count;
+< 	cmd.buf = i2c_buf;
+< 	cmd.last = 0;
+< 	error = ioctl(fd, I2CWRITE, &cmd);
+< 	if (error == -1) {
+< 		err_msg = "ioctl: error when write";
+< 		goto err1;
+< 	}
+< 	cmd.slave = i2c_opt.addr;
+< 	error = ioctl(fd, I2CSTOP, &cmd);
+< 	if (error == -1) {
+< 		err_msg = "ioctl: error sending stop condition";
+< 		goto err2;
+---
+> 	dbuf = malloc( (bufsize + i2c_opt.count) * sizeof(uint8_t) );
+> 
+> 	for (i = 0; i < bufsize; i++) {
+> 	  dbuf[i] = buf[i];
+> 	}
+> 
+> 	for (i = 0; i < i2c_opt.count; i++ )  {
+> 	  dbuf[i+bufsize] = i2c_buf[i];
+> 	}
+> 
+> 	msg.slave = i2c_opt.addr;
+> 	msg.flags = !IIC_M_RD;
+> 	msg.len = (bufsize + i2c_opt.count) * sizeof( uint8_t );
+> 	msg.buf = dbuf;
+> 	rdwr.msgs = &msg;
+> 	rdwr.nmsgs = 1;
+> 	if ( ioctl(fd, I2CRDWR, &rdwr) < 0 )  {
+> 	  err_msg = "ioctl: error when write";
+> 	  goto err1;
+357,364d319
+< 	cmd.slave = i2c_opt.addr;
+< 	error = ioctl(fd, I2CSTOP, &cmd);
+< 	if (error == -1)
+< 		fprintf(stderr, "error sending stop condtion\n");
+< err2:
+< 	if (err_msg)
+< 		fprintf(stderr, "%s", err_msg);
+< 
+370c325
+< i2c_read(char *dev, struct options i2c_opt, char *i2c_buf)
+---
+> i2c_read(char *dev, struct options i2c_opt, uint8_t *i2c_buf)
+372,374c327,331
+< 	struct iiccmd cmd;
+< 	int i, fd, error, bufsize;
+< 	char *err_msg, data = 0, *buf;
+---
+> 	int i, fd, bufsize;
+> 	char *err_msg;
+> 	struct iic_msg *msg;
+> 	struct iic_rdwr_data rdwr;
+> 	uint8_t *buf;
+380,381d336
+< 	bzero(&cmd, sizeof(cmd));
+< 
+383,391d337
+< 		cmd.slave = i2c_opt.addr;
+< 		cmd.count = 1;
+< 		cmd.last = 0;
+< 		cmd.buf = &data;
+< 		error = ioctl(fd, I2CSTART, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending start condition";
+< 			goto err1;
+< 		}
+397a344
+> 	}
+399,407c346
+< 		cmd.count = bufsize;
+< 		cmd.buf = buf;
+< 		cmd.last = 0;
+< 		error = ioctl(fd, I2CWRITE, &cmd);
+< 		free(buf);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error when write offset";
+< 			goto err1;
+< 		}
+---
+> 	msg = malloc( (bufsize + i2c_opt.count) * sizeof(struct iic_msg) );
+409,414c348,352
+< 		if (i2c_opt.mode == I2C_MODE_STOP_START) {
+< 			cmd.slave = i2c_opt.addr;
+< 			error = ioctl(fd, I2CSTOP, &cmd);
+< 			if (error == -1)
+< 				goto err2;
+< 		}
+---
+> 	for (i = 0; i < bufsize; i++) {
+> 	  msg[i].slave = i2c_opt.addr;
+> 	  msg[i].flags = !IIC_M_RD;
+> 	  msg[i].len = sizeof( uint8_t );
+> 	  msg[i].buf = &buf[i];
+416,436d353
+< 	cmd.slave = i2c_opt.addr;
+< 	cmd.count = 1;
+< 	cmd.last = 0;
+< 	cmd.buf = &data;
+< 	if (i2c_opt.mode == I2C_MODE_STOP_START) {
+< 		error = ioctl(fd, I2CSTART, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending start condition";
+< 			goto err1;
+< 		}
+< 	} else if (i2c_opt.mode == I2C_MODE_REPEATED_START) {
+< 		error = ioctl(fd, I2CRPTSTART, &cmd);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error sending repeated start "
+< 			    "condition";
+< 			goto err1;
+< 		}
+< 	}
+< 	error = ioctl(fd, I2CSTOP, &cmd);
+< 	if (error == -1)
+< 		goto err2;
+438,443c355,359
+< 	for (i = 0; i < i2c_opt.count; i++) {
+< 		error = read(fd, &i2c_buf[i], 1);
+< 		if (error == -1) {
+< 			err_msg = "ioctl: error while reading";
+< 			goto err1;
+< 		}
+---
+> 	for (i = 0; i < i2c_opt.count; i++ )  {
+> 	  msg[i+bufsize].slave = i2c_opt.addr;
+> 	  msg[i+bufsize].flags = IIC_M_RD;
+> 	  msg[i+bufsize].len = sizeof( uint8_t );
+> 	  msg[i+bufsize].buf = &i2c_buf[i];
+445a362,369
+> 	rdwr.msgs = msg;
+> 	rdwr.nmsgs = bufsize + i2c_opt.count;
+> 
+> 	if ( ioctl(fd, I2CRDWR, &rdwr) < 0 )  {
+> 	  err_msg = "ioctl: error while reading";
+> 	  goto err1;
+> 	}
+> 	
+450,457d373
+< 	cmd.slave = i2c_opt.addr;
+< 	error = ioctl(fd, I2CSTOP, &cmd);
+< 	if (error == -1)
+< 		fprintf(stderr, "error sending stop condtion\n");
+< err2:
+< 	if (err_msg)
+< 		fprintf(stderr, "%s", err_msg);
+< 
+467c383
+< 	char *dev, *skip_addr, *i2c_buf;
+---
+> 	char *dev, *skip_addr;
+468a385
+> 	uint8_t *i2c_buf;
+494c411
+< 			i2c_opt.addr = (strtoul(optarg, 0, 16) << 1);
+---
+> 			sscanf( optarg, "%hX", &i2c_opt.addr);
+578c495
+< 		    i2c_opt.addr >> 1, i2c_opt.dir, i2c_opt.off,
+---
+> 		    i2c_opt.addr, i2c_opt.dir, i2c_opt.off,
+606,609d522
+< 	if (i2c_opt.verbose)
+< 		fprintf(stderr, "\nData %s (hex):\n", i2c_opt.dir == 'r' ?
+< 		    "read" : "written");
+< 
