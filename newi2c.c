@@ -185,11 +185,11 @@ scan_bus(struct iiccmd cmd, char *dev, int skip, char *skip_addr)
 		}
 
 		offset = 0;
-		msg[0].slave = i;
+		msg[0].slave = i << 1 | !IIC_M_RD;
 		msg[0].flags = !IIC_M_RD;
 		msg[0].len = sizeof( offset );
 		msg[0].buf = &offset;
-		msg[1].slave = i;
+		msg[1].slave = i << 1 | IIC_M_RD;
 		msg[1].flags = IIC_M_RD;
 		msg[1].len = sizeof( buf );
 		msg[1].buf = &buf;
@@ -302,7 +302,7 @@ i2c_write(char *dev, struct options i2c_opt, uint8_t *i2c_buf)
 	  dbuf[i+bufsize] = i2c_buf[i];
 	}
 
-	msg.slave = i2c_opt.addr;
+	msg.slave = i2c_opt.addr << 1 | !IIC_M_RD;
 	msg.flags = !IIC_M_RD;
 	msg.len = (bufsize + i2c_opt.count) * sizeof( uint8_t );
 	msg.buf = dbuf;
@@ -346,14 +346,14 @@ i2c_read(char *dev, struct options i2c_opt, uint8_t *i2c_buf)
 	msg = malloc( (bufsize + i2c_opt.count) * sizeof(struct iic_msg) );
 
 	for (i = 0; i < bufsize; i++) {
-	  msg[i].slave = i2c_opt.addr;
+	  msg[i].slave = i2c_opt.addr << 1 | !IIC_M_RD;
 	  msg[i].flags = !IIC_M_RD;
 	  msg[i].len = sizeof( uint8_t );
 	  msg[i].buf = &buf[i];
 	}
 
 	for (i = 0; i < i2c_opt.count; i++ )  {
-	  msg[i+bufsize].slave = i2c_opt.addr;
+	  msg[i+bufsize].slave = i2c_opt.addr << 1 | IIC_M_RD;
 	  msg[i+bufsize].flags = IIC_M_RD;
 	  msg[i+bufsize].len = sizeof( uint8_t );
 	  msg[i+bufsize].buf = &i2c_buf[i];
